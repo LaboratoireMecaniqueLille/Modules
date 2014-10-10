@@ -1,7 +1,11 @@
 To install the modules:
 
-1/ download the module folder
+1/ download the ZIP file of the module folder with the button on the right -->
 
-2/ python setup.py install
+2/ Unzip
+
+3/ inside a terminal, go to the Modules-master directory
+
+4/ python setup.py install
 
 You can now import the modules in python!
