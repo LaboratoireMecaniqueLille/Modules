@@ -1,6 +1,6 @@
 To install the modules:
 
-1/ download the ZIP file of the module folder with the button on the right -->
+1/ download the ZIP file 
 
 2/ Unzip
 
