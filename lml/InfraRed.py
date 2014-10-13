@@ -2,11 +2,8 @@
 import numpy as np
 import scipy
 import pyradi
-#import pyradi.ryptw as ryptw
-#import pylab 
 from scipy.optimize import leastsq
 import matplotlib.pyplot as plt
-#from collections import OrderedDict
 import math as m
 import GetPTW as PTW
 import copy
@@ -31,7 +28,6 @@ class Calibration:
     self.NUC=NUC # set True if you want to use the NUC (DL=>DL) function
     self.extension=extension
     self.camera=camera
-    #self.clim=[21,35]
 
 
 # # # # Definition of the functions
@@ -47,9 +43,6 @@ class Calibration:
 	imageBB_[i]=PTW.GetPTW(self.directory+str(i+self.Tmin)+".ptm")
 	imageBB_[i].get_frame(0)
 	imageBB[i]=1.*imageBB_[i].frame_data 
-	#imageBB_BadPix[i],mouchard,nbr_BP[i]=BP.bad_pixels_detection_grad(imageBB_NUC[i],bad_pix_critere,result_directory)
-	#imageBB_BadPix[i],mouchard,nbr_BP[i]=BP.bad_pixels_detection(imageBB[i],bad_pix_std,result_directory)
-	#matrice.append(imageBB[i])
     if self.extension=="ptw":
       for i in range(0,(self.Tmax-self.Tmin+self.Tstep),self.Tstep):
 	imageBB_[i]=PTW.GetPTW(self.directory+str(i+self.Tmin)+".ptw")
@@ -78,10 +71,7 @@ class Calibration:
 	c=shape[1]
 	DL_mean.append(np.mean(imageBB[i][m.floor((b-self.area_size)/2):m.floor((b+self.area_size)/2),m.floor((c-self.area_size)/2):m.floor((c+self.area_size)/2)]))
 	mat2vect[i]=np.reshape(imageBB[i],(1,b*c))
-	#print mat2vect[i]
-	#print i
       matrice = np.concatenate([mat2vect[i] for i in range(len(imageBB))],axis=0)
-      #print matrice
     if self.camera=="jade":
       sortie={}
       DL_mean=[]
@@ -230,67 +220,42 @@ class Calibration:
   def verif_calibration(self,imageBB):  # This loop evaluate and show every BB-image imported 
     T_map_reshaped={}
     DL={}
-    for i in range(10,(self.Tmax-self.Tmin+self.Tstep),self.Tstep):  ################################################################################################################
+    for i in range(0,(self.Tmax-self.Tmin+self.Tstep),self.Tstep): 
       DL[0]=imageBB[i]
       T_map_reshaped[i]=self.apply_coeffs(DL)
       self.heat_map(T_map_reshaped[i])
       
 #This function applies the calibration to ALL the images in the essay. MAKE SURE your calibration is right before launching this. 
-  def apply_to_essay(self,save_tif):  #Apply the coefficients to every images in the video, and save them as .npy
-    test1=PTW.GetPTW(self.video_directory+"Dep-"+str(0)+".ptw")
+#Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside with mK precision. Temperature = pixelValue /1000.
+  def apply_to_essay(self,save_tif,video):
+    test1=PTW.GetPTW(video)
     frame_nbr=test1.number_of_frames
     frame_rate=test1.frame_rate
-    #for i in range (0,frame_nbr):
     frame={}
     for i in range (0,frame_nbr):
       test1.get_frame(i)
       frame[0]=(test1.frame_data)
       T_map2=self.apply_coeffs(frame)
       T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-      #T_map=np.asarray(self.apply_coeffs(frame),dtype=np.float16)
-      print T_map, np.max(T_map), np.min(T_map), np.shape(T_map)
-      T_map2=np.around(T_map,decimals=3)
-      T_map3=(T_map2*1000).astype(np.uint16)
-      print "ok1"
-      #np.save((self.result_directory+"IR_images/"+"frame_"+str(i)),T_map) # Save the current image in the file
+      T_map3=np.around(T_map,decimals=3)
+      T_map4=(T_map3*1000).astype(np.uint16)
       if save_tif==True:
-	#M=np.max(T_map)
-	#m=np.min(T_map)
-	#print M, m
-	#M=34
-	#m=21
-	#DL=255*((T_map.astype(np.int16))-m)/(M-m)
-	#DL=T_map.astype(np.float16)
-	#print DL
-	#io.imsave(self.result_directory+"IR_images/"+"img_"+str(i)+".tif",DL.astype(np.int16))
-	#print T_map3,np.max(T_map3), np.min(T_map3)
-	io.imsave(self.result_directory+"IR_images/"+"img_"+str(i)+"_io.tiff",T_map3) #.astype(np.int16)
-	#plt.imsave(self.result_directory+"IR_images/"+"img_"+str(i)+".tiff",T_map3,cmap=plt.cm.gray,vmin=m,vmax=M)  
-	#img=io.imread(self.result_directory+"IR_images/"+"img_5999_io.tiff")
-	#diff=T_map3-img
-	#print np.min(diff), np.max(diff), np.mean(diff)
+	io.imsave(self.result_directory+"IR_images/"+"img_"+str(i)+".tiff",T_map4) #.astype(np.int16)
 
-  def apply_to_essay_mean(self,save_tif):  #Apply the coefficients to every images in the video, and save them as .npy
-    for j in range(18):
-      test1=PTW.GetPTW(self.video_directory+"Dep-"+str(j)+".ptw")
-      frame_nbr=test1.number_of_frames
-      #frame_rate=test1.frame_rate
-      #for i in range (0,frame_nbr):
-      frame={}
-      frame[0]=0
-      for i in range (0,frame_nbr):
-	test1.get_frame(i)
-	frame[0]+=(test1.frame_data)/(1.*frame_nbr)
-      T_map2=self.apply_coeffs(frame)
-      T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-      #T_map=np.asarray(self.apply_coeffs(frame),dtype=np.float16)
-      #print T_map, np.max(T_map), np.min(T_map), np.shape(T_map)
-      T_map2=np.around(T_map,decimals=3)
-      T_map3=(T_map2*1000).astype(np.uint16)
-      #print "ok1"
-      #np.save((self.result_directory+"IR_images/"+"frame_"+str(i)),T_map) # Save the current image in the file
-      if save_tif==True:
-	  io.imsave(self.result_directory+"IR_images/"+"Dep_"+str(j)+"_mean.tiff",T_map3) #.astype(np.int16)
-	  plt.imsave(self.result_directory+"IR_images/"+"Dep_"+str(j)+"_mean_plt.tiff",T_map3,cmap=plt.cm.gray)
+
+  def apply_to_essay_mean(self,save_tif,video,video_nbr):
+    test1=PTW.GetPTW(video)
+    frame_nbr=test1.number_of_frames
+    frame[0]=0
+    for i in range (0,frame_nbr):
+      test1.get_frame(i)
+      frame[0]+=(test1.frame_data)/(1.*frame_nbr)
+    T_map2=self.apply_coeffs(frame)
+    T_map=np.clip(T_map2,self.Tmin,self.Tmax)
+    T_map2=np.around(T_map,decimals=3)
+    T_map3=(T_map2*1000).astype(np.uint16)
+    if save_tif==True:
+	io.imsave(self.result_directory+"IR_images/"+"Dep_"+str(video_nbr)+"_mean.tiff",T_map3) #.astype(np.int16)
+	#plt.imsave(self.result_directory+"IR_images/"+"Dep_"+str(j)+"_mean_plt.tiff",T_map3,cmap=plt.cm.gray)
 
 
