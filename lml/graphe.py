@@ -2,7 +2,8 @@ import copy
 import numpy as np
 from multiprocessing import Process, Pipe
 import matplotlib.pyplot as plt 
-
+import scipy.signal as signal
+import pandas as PD
 
 
 
@@ -47,7 +48,7 @@ def plot_time(data_size,graph_recv_n,graph_args):
 	  var[z][:-np.shape(np.array(data))[1]] = var[z][np.shape(np.array(data))[1]:]
 	  var[z][-np.shape(np.array(data))[1]:]= data[z]
       li.set_xdata(var[graph_args[0]])
-      li.set_ydata(var[graph_args[1]]))  # update the graph values #####################################################  delete rolling mean here
+      li.set_ydata(PD.rolling_mean(np.asarray(var[graph_args[1]]),10))  # update the graph values #####################################################  delete rolling mean here
       if nbr_graphs ==2:
 	lo.set_xdata(var[graph_args[2]])
 	lo.set_ydata(var[graph_args[3]])

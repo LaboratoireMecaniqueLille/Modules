@@ -3,12 +3,12 @@ import serial
 import time
 
 ### Parameters
-#limit = 0.00075 # limit for the eprouvette protection
-##offset_=-0.0056
-##protection_speed=1000. # nominal speed for the protection
-#frequency=1000. # refreshing frequency (Hz)
-##alpha = 1.05
-#Vmax=1000
+limit = 0.00075 # limit for the eprouvette protection
+#offset_=-0.0056
+#protection_speed=1000. # nominal speed for the protection
+frequency=1000. # refreshing frequency (Hz)
+#alpha = 1.05
+
 
 
 class Port:
@@ -30,7 +30,13 @@ class Port:
     self.ser.close()
 
   def move(self,speed):
-    """Set the speed"""
+    #"""Set the speed"""
+    #if speed >Vmax:
+      #speed=Vmax
+    #elif speed <-Vmax:
+      #speed =-Vmax
+      ##print speed
+    #self.ser.write("J "+str(speed)+"\r\nCLRFAULT\r\nEN\r\n")
     self.ser.write("J "+str(speed)+"\r\n")    
     
   def CLRFAULT(self):
@@ -38,11 +44,12 @@ class Port:
     self.ser.write("OPMODE 0\r\n EN\r\n")
 
 
-def protection_eprouvette(limit,frequency,Vmax,*args):
+def protection_eprouvette(Vmax,*args):
   """This function aim to keep the sensor value at the same level as the initial level, and moves the motor in consequence.
   args must be open Ports, paired with the corresponding sensor, and data pipes e.g. for each port: [port0, axe0,time_pipe,sensor_pipe,speed_pipe]"""
   condition=True
   speed=0
+  print len(args)
   speed_i=np.zeros(len(args))
   offset=np.zeros(len(args))
   for i in range(len(args)):
@@ -50,7 +57,7 @@ def protection_eprouvette(limit,frequency,Vmax,*args):
     for j in range(int(2*frequency)):
       t_sensor, effort=args[i][1].get()
       offset[i]+=effort/(2.*frequency)   
-    print "Done"
+    print "Done : offset for port %s = %s" %(i,offset[i])
   t0=time.time()  #define origin of time for this test
   t=t0
   while condition==True:
@@ -59,6 +66,7 @@ def protection_eprouvette(limit,frequency,Vmax,*args):
     t=time.time()
     for i in range(len(args)):
       t_sensor, effort=args[i][1].get()
+      #print "i= %s, effort = %s" %(i,effort)
       t_sensor-=t0 # use t0 as origin of time
       if (effort-offset[i]) >= limit:
 	speed=-Vmax
@@ -71,8 +79,57 @@ def protection_eprouvette(limit,frequency,Vmax,*args):
 	#print "speed = %s" %speed
       speed_i[i]=speed
       args[i][2].send(t_sensor) # send data to the save function
-      args[i][3].send(effort)
+      args[i][3].send(effort-offset[i])
       args[i][4].send(speed)
       
     
-  
+def etalonnage(effort,time_pipe,jauge_pipe,F0_pipe,F1_pipe,ports,axes,jauge,Fmax,Fmin,Vmax):
+  speed_i=0
+  t0,V=jauge()
+  print "jauge = %s" %V
+  print "Fmax=%s" %Fmax
+  print "Fmin = %s" %Fmin
+  offset_F0=0
+  offset_F1=0
+  for i in range(100): # 100 points - mean of the minimal Tension
+      t,F0=axes[0]()
+      offset_F0+=F0/100.
+  for i in range(100): # 100 points - mean of the minimal Tension
+      t,F1=axes[1]()
+      offset_F1+=F1/100.
+  while V >= Fmax:
+    print "1"
+    speed=-Vmax
+    t,V=jauge()
+    print V
+    t,F=effort()
+    t,F0=axes[0]()
+    t,F1=axes[1]()
+    time_pipe.send(t-t0)
+    jauge_pipe.send(F)
+    F0_pipe.send(F0-offset_F0)
+    F1_pipe.send(F1-offset_F1)
+    if speed!=speed_i:
+      speed_i=speed
+      ports[0].move(speed)
+      ports[1].move(speed)
+  while V <= Fmin:
+    print "2"
+    speed=Vmax
+    t,V=jauge()
+    print V
+    t,F=effort()
+    t,F0=axes[0]()
+    t,F1=axes[1]()
+    time_pipe.send(t-t0)
+    jauge_pipe.send(F)
+    F0_pipe.send(F0-offset_F0)
+    F1_pipe.send(F1-offset_F1)
+    if speed!=speed_i:
+      speed_i=speed
+      ports[0].move(speed)
+      ports[1].move(speed)
+  ports[0].move(0)
+  ports[1].move(0)
+
+      

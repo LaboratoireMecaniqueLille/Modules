@@ -2,7 +2,7 @@ import numpy as np
 import time
 from multiprocessing import Pipe
 import math
-import pandas as PD
+np.set_printoptions(threshold='nan', linewidth=500)
 
 def f(I,O,path_x,path_y,time_pipe,sensor_pipe): 
   """allows you to control one actuator depending on a path: on time path_x[i], set the output command to path_y[i]
@@ -25,15 +25,17 @@ def f(I,O,path_x,path_y,time_pipe,sensor_pipe):
   sensor_pipe.send(0.0)
   
 def save(recv_pipe,saving_step):
-  """This function saves data in a file. BEWARE the log file needs to be cleaned before starting this function, otherwise it just keep writing a the end of the file.
+  """This function saves data in a file and send it in a pipe. BEWARE the log file needs to be cleaned before starting this function, otherwise it just keep writing a the end of the file.
+     - acquisition_step is the number of iteration before sending and saving data
      - you save one point every saving_step (1 to save them all)
-     - recv_pipe is the incoming pipes with all the data in it."""
+     - args are all the incoming pipes."""
+  #nbr=len(args)
 ### INIT
   condition=True
   save_number=0
 ### Main loop
   while condition==True:
-## init data matrixes and receive data
+## init data matrixes
     data=recv_pipe.recv()
     nbr=np.shape(data)[0]
 ## The following loops are used to save the data
@@ -41,7 +43,7 @@ def save(recv_pipe,saving_step):
     fo.seek(0,2) #place the "cursor" at the end of the file, so every writing will not erase the previous ones
     data_to_save=""
     data1=np.empty((np.shape(np.array(data))[0],int(math.ceil(len(data[0])//saving_step))))
-    if saving_step>1:  # This loop mCLRFAULTeans the data to decrease the number of points to save
+    if saving_step>1:  # This loop means the data to decrease the number of points to save
       for x in range(int(math.ceil(len(data[0])//saving_step))): # euclidian division here
 	for i in range(np.shape(np.array(data))[0]):
 	  if x<(len(data[0])//saving_step):
@@ -56,7 +58,7 @@ def save(recv_pipe,saving_step):
     save_number+=1
     
 def pipe_compactor(acquisition_step,send_pipes,*args):
-  """Receive n pipes (as args),and send back all the data as one to every pipes in send_pipes, after receiveing acquisition_step number of points"""
+  """Receive n pipes (as args), and send all back in one(as send pipe), after receiveing acquisition_step number of points"""
   nbr=len(args)
   condition=True
   while condition==True:
@@ -70,9 +72,3 @@ def pipe_compactor(acquisition_step,send_pipes,*args):
       i+=1
     for i in range(len(send_pipes)):
       send_pipes[i].send(data)
-      
-def signal_filter(width, recv_pipe, send_pipe):
-  data=recv_pipe.recv()
-  for i in range(shape(data)[0]):
-    data[i]=PD.rolling_mean(np.asarray(data[i]),width)
-  send_pipe.send(data)
