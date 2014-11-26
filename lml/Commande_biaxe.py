@@ -1,12 +1,13 @@
 import numpy as np
 import serial
 import time
+import os
 
 ### Parameters
-limit = 0.00075 # limit for the eprouvette protection
+limit = 0.0005 # limit for the eprouvette protection
 #offset_=-0.0056
 #protection_speed=1000. # nominal speed for the protection
-frequency=1000. # refreshing frequency (Hz)
+frequency=500. # refreshing frequency (Hz)
 #alpha = 1.05
 
 
@@ -49,15 +50,15 @@ def protection_eprouvette(Vmax,*args):
   args must be open Ports, paired with the corresponding sensor, and data pipes e.g. for each port: [port0, axe0,time_pipe,sensor_pipe,speed_pipe]"""
   condition=True
   speed=0
-  print len(args)
   speed_i=np.zeros(len(args))
   offset=np.zeros(len(args))
   for i in range(len(args)):
     print "Evaluating offset for port %s..." %i
-    for j in range(int(2*frequency)):
+    for j in range(int(1*frequency)):
       t_sensor, effort=args[i][1].get()
-      offset[i]+=effort/(2.*frequency)   
+      offset[i]+=effort/(1.*frequency)   
     print "Done : offset for port %s = %s" %(i,offset[i])
+  #time.sleep(10)
   t0=time.time()  #define origin of time for this test
   t=t0
   while condition==True:
@@ -83,9 +84,9 @@ def protection_eprouvette(Vmax,*args):
       args[i][4].send(speed)
       
     
-def etalonnage(effort,time_pipe,jauge_pipe,F0_pipe,F1_pipe,ports,axes,jauge,Fmax,Fmin,Vmax):
+def etalonnage(time_pipe,jauge_pipe,F0_pipe,F1_pipe,ports,axes,jauge,Fmax,Fmin,Vmax):
   speed_i=0
-  t0,V=jauge()
+  t0_,V=jauge()
   print "jauge = %s" %V
   print "Fmax=%s" %Fmax
   print "Fmin = %s" %Fmin
@@ -102,11 +103,10 @@ def etalonnage(effort,time_pipe,jauge_pipe,F0_pipe,F1_pipe,ports,axes,jauge,Fmax
     speed=-Vmax
     t,V=jauge()
     print V
-    t,F=effort()
-    t,F0=axes[0]()
     t,F1=axes[1]()
-    time_pipe.send(t-t0)
-    jauge_pipe.send(F)
+    t,F0=axes[0]()
+    time_pipe.send(t-t0_)
+    jauge_pipe.send(V)
     F0_pipe.send(F0-offset_F0)
     F1_pipe.send(F1-offset_F1)
     if speed!=speed_i:
@@ -118,11 +118,10 @@ def etalonnage(effort,time_pipe,jauge_pipe,F0_pipe,F1_pipe,ports,axes,jauge,Fmax
     speed=Vmax
     t,V=jauge()
     print V
-    t,F=effort()
-    t,F0=axes[0]()
     t,F1=axes[1]()
-    time_pipe.send(t-t0)
-    jauge_pipe.send(F)
+    t,F0=axes[0]()
+    time_pipe.send(t-t0_)
+    jauge_pipe.send(V)
     F0_pipe.send(F0-offset_F0)
     F1_pipe.send(F1-offset_F1)
     if speed!=speed_i:

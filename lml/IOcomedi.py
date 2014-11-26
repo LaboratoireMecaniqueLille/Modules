@@ -1,7 +1,7 @@
 import comedi as c
 import time
 import copy
-
+import os
 
 class Out:
   """Define an output channel and allows one to send signal through it"""

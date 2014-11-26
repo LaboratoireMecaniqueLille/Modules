@@ -24,7 +24,7 @@ def f(I,O,path_x,path_y,time_pipe,sensor_pipe):
   time_pipe.send(0.0) # signal that the acquisition is over
   sensor_pipe.send(0.0)
   
-def save(recv_pipe,saving_step):
+def save(recv_pipe,saving_step,log_file):
   """This function saves data in a file and send it in a pipe. BEWARE the log file needs to be cleaned before starting this function, otherwise it just keep writing a the end of the file.
      - acquisition_step is the number of iteration before sending and saving data
      - you save one point every saving_step (1 to save them all)
@@ -39,7 +39,7 @@ def save(recv_pipe,saving_step):
     data=recv_pipe.recv()
     nbr=np.shape(data)[0]
 ## The following loops are used to save the data
-    fo=open("log.txt","a") # "a" for appending
+    fo=open(log_file,"a") # "a" for appending
     fo.seek(0,2) #place the "cursor" at the end of the file, so every writing will not erase the previous ones
     data_to_save=""
     data1=np.empty((np.shape(np.array(data))[0],int(math.ceil(len(data[0])//saving_step))))
