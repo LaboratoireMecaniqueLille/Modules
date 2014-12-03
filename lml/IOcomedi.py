@@ -2,6 +2,9 @@ import comedi as c
 import time
 import copy
 import os
+import sys, string, struct
+from multiprocessing import Array
+import numpy as np
 
 class Out:
   """Define an output channel and allows one to send signal through it"""
@@ -79,3 +82,77 @@ class In:
     self.position=(c.comedi_to_phys(data[1],self.range_ds,self.maxdata)*self.gain+self.offset)
     t=time.time()
     return (t, self.position)
+  
+def streamer(device,subdevice,chans,comedi_range,shared_array):
+  ''' read the cannels defined in chans, on the device/subdevice, and streams the values in the shared_array.
+  The shared_array has a lock, to avoid reading and writing at the same time and it's process-proof.
+  device: '/dev/comedi0'
+  subdevice : 0=in, 1=out
+  chans : [0,1,2,3,4....] : BE AWARE the reading is done crescendo, no matter the order given here. It means that [0,1,2] and [2,0,1] will both have [0,1,2] as result, but you can ask for [0,1,5].
+  comedi_range: same size as chans, with the proper range for each chan. If unknown, try [0,0,0,....].
+  shared_array: same size as chans, must be defined before with multiprocess.Array: shared_array= Array('f', np.arange(len(chans)))
+  '''
+  dev=c.comedi_open(device)
+  if not dev: raise "Error openning Comedi device"
+
+  fd = c.comedi_fileno(dev) #get a file-descriptor for use later
+
+  BUFSZ = 10000 #buffer size
+  freq=8000 # acquisition frequency: if too high, set frequency to maximum.
+ 
+  nchans = len(chans) #number of channels
+  aref =[c.AREF_GROUND]*nchans
+
+  mylist = c.chanlist(nchans) #create a chanlist of length nchans
+  maxdata=[0]*(nchans)
+  range_ds=[0]*(nchans)
+
+  for index in range(nchans):  #pack the channel, gain and reference information into the chanlist object
+    mylist[index]=c.cr_pack(chans[index], comedi_range[index], aref[index])
+    maxdata[index]=c.comedi_get_maxdata(dev,subdevice,chans[index])
+    range_ds[index]=c.comedi_get_range(dev,subdevice,chans[index],comedi_range[index])
+
+  cmd = c.comedi_cmd_struct()
+
+  period = int(1.0e9/freq)  # in nanoseconds
+  ret = c.comedi_get_cmd_generic_timed(dev,subdevice,cmd,nchans,period)
+  if ret: raise "Error comedi_get_cmd_generic failed"
+	  
+  cmd.chanlist = mylist # adjust for our particular context
+  cmd.chanlist_len = nchans
+  cmd.scan_end_arg = nchans
+  cmd.stop_arg=0
+  cmd.stop_src=c.TRIG_NONE
+
+  t0 = time.time()
+  j=0
+  ret = c.comedi_command(dev,cmd)
+  if ret !=0: raise "comedi_command failed..."
+
+#Lines below are for initializing the format, depending on the comedi-card.
+  data = os.read(fd,BUFSZ) # read buffer and returns binary data
+  data_length=len(data)
+  if maxdata[0]<=65536: # case for usb-dux-D
+    n = data_length/2 # 2 bytes per 'H'
+    format = `n`+'H'
+  elif maxdata[0]>65536: #case for usb-dux-sigma
+    n = data_length/4 # 2 bytes per 'H'
+    format = `n`+'I'
+    
+# init is over, start acquisition and stream
+  try:
+    while True:
+      data = os.read(fd,BUFSZ) # read buffer and returns binary data
+      if len(data)==data_length:
+	datastr = struct.unpack(format,data) # convert binary data to digital value
+	if len(datastr)==nchans: #if data not corrupted for some reason
+	  for i in range(nchans):
+	    shared_array[i]=c.comedi_to_phys((datastr[i]),range_ds[i],maxdata[i])
+	j+=1
+	print "Frequency= ",(j/(time.time()-t0))
+	print np.transpose(shared_array[:])
+
+  except (KeyboardInterrupt):	
+    c.comedi_cancel(dev,subdevice)
+    ret = c.comedi_close(dev)
+    if ret !=0: raise "comedi_close failed..."
