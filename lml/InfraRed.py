@@ -33,20 +33,19 @@ class Calibration:
 # # # # Definition of the functions
 
   def import_imageBB(self):
-"""
-  This function imports ths BB-image and shape them in vectors. 
-  Returns:  
-    imageBB[i]: the original array of DL, where i is image number
-"""
+    """  This function imports ths BB-image and shape them in vectors. 
+      Returns:  
+	imageBB[i]: the original array of DL, where i is image number
+    """
     imageBB={}
     imageBB_={}
     if self.extension=="ptm":
-      for i in range(0,(self.Tmax-self.Tmin)/self.Tstep):
+      for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1):
 	imageBB_[i]=PTW.GetPTW(self.directory+str(i*self.Tstep+self.Tmin)+".ptm")
 	imageBB_[i].get_frame(0)
 	imageBB[i]=1.*imageBB_[i].frame_data 
     if self.extension=="ptw":
-      for i in range(0,(self.Tmax-self.Tmin)/self.Tstep):
+      for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1):
 	imageBB_[i]=PTW.GetPTW(self.directory+str(i*self.Tstep+self.Tmin)+".ptw")
 	nbr_of_frames=imageBB_[i].number_of_frames
 	imageBB[i]=0
@@ -57,13 +56,13 @@ class Calibration:
 
 
   def reshape(self,DL):
-"""
- This shape images into vectors. 
-  Returns: 
-      matrice: an array in wich each line is a vectorised BB-image, one line by T°C
-      DL_mean[i]: the mean DL in the central area, for the NUC function. i depend on the T°C
-      shape : the original shape of ths images
-"""
+    """
+    This shape images into vectors. 
+      Returns: 
+	  matrice: an array in wich each line is a vectorised BB-image, one line by T°C
+	  DL_mean[i]: the mean DL in the central area, for the NUC function. i depend on the T°C
+	  shape : the original shape of ths images
+    """
     imageBB=DL
     imageBB2={}
     matrice=[]
@@ -100,13 +99,13 @@ class Calibration:
 
 
   def NUC_DL(self,DL,DL_mean):
-"""
-This function calculate the NUC coefficient for each pixels, based on the central-zone mean DL
-  Returns:
-      The matrix of vectorised BB-images, with the NUC applied
-  Save:
-      Save the NUC coefficients in the result directory, under coeffs_NUC.pyc
-"""
+    """
+    This function calculate the NUC coefficient for each pixels, based on the central-zone mean DL
+      Returns:
+	  The matrix of vectorised BB-images, with the NUC applied
+      Save:
+	  Save the NUC coefficients in the result directory, under coeffs_NUC.pyc
+    """
     DLC_NUC=copy.copy(DL)
     a,d = np.shape(DL)
     interp_degree=3
@@ -121,13 +120,13 @@ This function calculate the NUC coefficient for each pixels, based on the centra
 
 
   def DL2Flux(self,DL):
-"""
-This function calculate the calibration coefficients for each pixels
-  Returns:
-      The matrix of vectorised BB-images, with the (NUC and) calibration applied
-  Save:
-      Save the calibration coefficients in the result directory, under coeffs_DL2Flux.pyc
-"""
+    """
+    This function calculate the calibration coefficients for each pixels
+      Returns:
+	  The matrix of vectorised BB-images, with the (NUC and) calibration applied
+      Save:
+	  Save the calibration coefficients in the result directory, under coeffs_DL2Flux.pyc
+    """
     DLC_Calibrated=copy.copy(DL)
     a,d=np.shape(DL)
     T = np.arange(self.Tmin,(self.Tmax+self.Tstep),self.Tstep)
@@ -143,14 +142,14 @@ This function calculate the calibration coefficients for each pixels
 
 
   def bad_pixels(self,DL,shape):
-"""
-This function spots the bad pixels in each image, and set their value to 0. It keeps the bad pixels of the worst image(with the maximum numbers of BP)
-  Returns:
-    DL_final, wich is the DL with mean value replacing the bad pixels. You are not supposed to use this for anything other than display purpose.
-    mouchard_final : the matrix of bad pixels (1 =good, 0=bad)
-    last_nbr_BP : the number of bad pixels spoted
-  Saves the mouchard matrix in the result directory.
-"""
+    """
+    This function spots the bad pixels in each image, and set their value to 0. It keeps the bad pixels of the worst image(with the maximum numbers of BP)
+      Returns:
+	DL_final, wich is the DL with mean value replacing the bad pixels. You are not supposed to use this for anything other than display purpose.
+	mouchard_final : the matrix of bad pixels (1 =good, 0=bad)
+	last_nbr_BP : the number of bad pixels spoted
+      Saves the mouchard matrix in the result directory.
+    """
     DL_final={}
     DL_mat={}
     DL_reshaped=[]
@@ -158,14 +157,14 @@ This function spots the bad pixels in each image, and set their value to 0. It k
     best_mouchard=[]
     
     
-    for i in range(0,(self.Tmax-self.Tmin)/self.Tstep):
+    for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1):
       DL_mat[i]=np.reshape(DL[i],shape)
       DL_mat[i],mouchard,nbr_BP=self.bad_pixels_detection_grad(DL_mat[i])
       DL_reshaped.append(np.reshape(DL_mat[i],(1,shape[0]*shape[1])))
       if nbr_BP>last_nbr_BP:
 	best_mouchard=mouchard
 	last_nbr_BP=nbr_BP
-    DL_final = np.concatenate([DL_reshaped[i] for i in range(0,(self.Tmax-self.Tmin)/self.Tstep)],axis=0)
+    DL_final = np.concatenate([DL_reshaped[i] for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1)],axis=0)
     mouchard_final=np.reshape(best_mouchard,(1,shape[0]*shape[1]))
     np.save(self.result_directory+'mouchard',mouchard_final)
     return DL_final,mouchard_final,last_nbr_BP
@@ -173,9 +172,9 @@ This function spots the bad pixels in each image, and set their value to 0. It k
 
 
   def bad_pixels_detection_grad(self,DL):
-"""
-This function is called by the bad_pixels function. It spots the bad pixels, based on the gradient of energy of each pixel
-"""
+    """
+    This function is called by the bad_pixels function. It spots the bad pixels, based on the gradient of energy of each pixel
+    """
     DL_corrected=copy.copy(DL)
     DLC_NUC=copy.copy(DL)
     b,c = np.shape(DL)
@@ -203,11 +202,11 @@ This function is called by the bad_pixels function. It spots the bad pixels, bas
 
 
   def apply_coeffs(self,DL):
-"""
-This function applies all the transformations (NUC, Calibration, and BP) to an image(NOT vectorised), with the coefficients stored in the result directory     
-   return:
-      masked_reshaped: map of temperatures if Flux=True, otherwise it's a map of the DL with NUC applied
-"""
+    """
+    This function applies all the transformations (NUC, Calibration, and BP) to an image(NOT vectorised), with the coefficients stored in the result directory     
+      return:
+	  masked_reshaped: map of temperatures if Flux=True, otherwise it's a map of the DL with NUC applied
+    """
     b,c=np.shape(DL[0])
     DL_vect, DL_mean, shape=self.reshape(DL)
     mouchard=np.load(self.result_directory+'mouchard.npy')
@@ -231,9 +230,9 @@ This function applies all the transformations (NUC, Calibration, and BP) to an i
     
 
   def heat_map(self,DL):
-"""
-This function plots the image with colorbar and 3-standart-deviation rule.
-"""
+    """
+    This function plots the image with colorbar and 3-standart-deviation rule.
+    """
     fig = plt.figure()
     ax = fig.add_subplot(1,1,1)
     plt.imshow(DL)
@@ -243,25 +242,25 @@ This function plots the image with colorbar and 3-standart-deviation rule.
     
 
   def verif_calibration(self,imageBB):
-"""
-This function displays the BB-images after applying all the calibration-corrections.
-"""
+    """
+    This function displays the BB-images after applying all the calibration-corrections.
+    """
     T_map_reshaped={}
     DL={}
-    for i in range(0,(self.Tmax-self.Tmin)/self.Tstep): 
+    for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1): 
       DL[0]=imageBB[i]
       T_map_reshaped[i]=self.apply_coeffs(DL)
       self.heat_map(T_map_reshaped[i])
       
 
   def apply_to_essay(self,save_tif,video):
-"""
-This function applies the calibration to ALL the images in the essay. MAKE SURE your calibration is right before launching this. 
-Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
-    - for T<65°C. Temperature = pixelValue /1000. mK precision
-    - for 65<T<650 , Temperature = Value/100, 10mK precision
-    - for T >650, Temperature = Value /10, 100mK precision
-"""
+    """
+    This function applies the calibration to ALL the images in the essay. MAKE SURE your calibration is right before launching this. 
+    Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
+	- for T<65°C. Temperature = pixelValue /1000. mK precision
+	- for 65<T<650 , Temperature = Value/100, 10mK precision
+	- for T >650, Temperature = Value /10, 100mK precision
+    """
     test1=PTW.GetPTW(self.video_directory+video)
     frame_nbr=test1.number_of_frames
     frame_rate=test1.frame_rate
@@ -283,13 +282,13 @@ Images are saved in .tiff 16 bits, wich allow to store temperature information d
 
 
   def apply_to_essay_mean(self,save_tif,video):
-"""
-This function applies the calibration to ALL the images in the essay and evaluate the mean value for each pixels. MAKE SURE your calibration is right before launching this. 
-Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
-    - for T<65°C. Temperature = pixelValue /1000. mK precision
-    - for 65<T<650 , Temperature = Value/100, 10mK precision
-    - for T >650, Temperature = Value /10, 100mK precision
-"""
+    """
+    This function applies the calibration to ALL the images in the essay and evaluate the mean value for each pixels. MAKE SURE your calibration is right before launching this. 
+    Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
+	- for T<65°C. Temperature = pixelValue /1000. mK precision
+	- for 65<T<650 , Temperature = Value/100, 10mK precision
+	- for T >650, Temperature = Value /10, 100mK precision
+    """
     test1=PTW.GetPTW(self.video_directory+video)
     frame_nbr=test1.number_of_frames
     frame[0]=0

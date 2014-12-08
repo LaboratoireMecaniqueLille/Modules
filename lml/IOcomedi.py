@@ -84,7 +84,7 @@ class In:
     return (t, self.position)
   
 def streamer(device,subdevice,chans,comedi_range,shared_array):
-  ''' read the cannels defined in chans, on the device/subdevice, and streams the values in the shared_array.
+  ''' read the channels defined in chans, on the device/subdevice, and streams the values in the shared_array.
   The shared_array has a lock, to avoid reading and writing at the same time and it's process-proof.
   device: '/dev/comedi0'
   subdevice : 0=in, 1=out
