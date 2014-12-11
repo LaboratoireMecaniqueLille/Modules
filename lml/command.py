@@ -4,6 +4,7 @@ from multiprocessing import Pipe
 import math
 np.set_printoptions(threshold='nan', linewidth=500)
 
+
 def f(I,O,path_x,path_y,time_pipe,sensor_pipe): 
   """allows you to control one actuator depending on a path: on time path_x[i], set the output command to path_y[i]
   args:
@@ -72,3 +73,34 @@ def pipe_compactor(acquisition_step,send_pipes,*args):
       i+=1
     for i in range(len(send_pipes)):
       send_pipes[i].send(data)
+      
+def data_filter(method, size, data_stream,filtered_stream):
+  """Receive a stream (multiprocessing.Value), filter it with said method and size, and return another Value (filtered_stream)
+  method : must be "median" or "mean"
+  size : number of values for floating mean or median
+  data_stream: input data as shared multiprocessing.Value
+  filtered_stream: output data as shared multiprocessing.Value
+  """
+  FIFO=[]
+  while True:
+    #print "FIFO = ", FIFO
+    data_stream.acquire()
+    data=data_stream.value
+    data_stream.release()
+    FIFO.insert(0,data)
+    if len(FIFO)>size:
+      FIFO.pop()
+    if method=="median":
+      result=np.median(FIFO)
+    elif method=="mean":
+      result=np.mean(FIFO)
+    filtered_stream.acquire()
+    filtered_stream.value=result
+    filtered_stream.release()
+    #time.sleep(0.1)
+  
+  
+  
+  
+  
+  
