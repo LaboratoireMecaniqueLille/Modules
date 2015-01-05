@@ -274,11 +274,12 @@ class Calibration:
 	T_map=np.clip(T_map2,self.Tmin,self.Tmax)
 	power=np.floor(np.log10(2**16/(max(T_map)))) # For storing Temperature information in a 16 bits tiff as integer 
 	T_map2=(np.around(T_map,decimals=power))*10**power
+	T_map2=(np.around(T_map,decimals=3))*10**3
       T_map3=(T_map2).astype(np.uint16)
       print T_map2.max()
       print T_map3.max()
       if save_tif==True:
-	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+".tiff",T_map3) #.astype(np.int16)
+	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+str(i)+".tiff",T_map3) #.astype(np.int16)
 
 
   def apply_to_essay_mean(self,save_tif,video):
