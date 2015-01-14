@@ -266,18 +266,19 @@ class Calibration:
     frame_rate=test1.frame_rate
     frame={}
     for i in range (0,frame_nbr):
+      print "frame n° : ",i
       test1.get_frame(i)
       frame[0]=(test1.frame_data)
-      print frame[0].max()
+      #print frame[0].max()
       T_map2=self.apply_coeffs(frame)
       if self.Flux==True:
 	T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-	power=np.floor(np.log10(2**16/(max(T_map)))) # For storing Temperature information in a 16 bits tiff as integer 
-	T_map2=(np.around(T_map,decimals=power))*10**power
+	#power=np.floor(np.log10(2**16/(max(T_map)))) # For storing Temperature information in a 16 bits tiff as integer 
+	#T_map2=(np.around(T_map,decimals=power))*10**power
 	T_map2=(np.around(T_map,decimals=3))*10**3
       T_map3=(T_map2).astype(np.uint16)
-      print T_map2.max()
-      print T_map3.max()
+      #print T_map2.max()
+      #print T_map3.max()
       if save_tif==True:
 	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+str(i)+".tiff",T_map3) #.astype(np.int16)
 
