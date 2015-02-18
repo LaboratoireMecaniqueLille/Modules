@@ -8,7 +8,7 @@ import numpy as np
 
 class Out:
   """Define an output channel and allows one to send signal through it"""
-  def __init__(self, device='/dev/comedi0',subdevice=1,channel=0,range_num=1,gain=1,offset=0, out_min=0, out_max=4.095):
+  def __init__(self,K=1,Ki=0,Kd=0,device='/dev/comedi0',subdevice=1,channel=0,range_num=1,gain=1,offset=0,out_min=0,out_max=4.095):
     self.subdevice=subdevice
     self.channel=channel
     self.range_num=range_num
@@ -30,7 +30,7 @@ class Out:
     
   def set_(self,wanted_position):
     """send a signal"""
-    self.out=(wanted_position-self.offset)/self.gain
+    self.out=(wanted_position/self.gain)-self.offset
     out_a=c.comedi_from_phys(self.out,self.range_ds,self.maxdata) # convert the wanted_position 
     c.comedi_data_write(self.device0,self.subdevice,self.channel,self.range_num,c.AREF_GROUND,out_a) # send the signal to the controler
     t=time.time()
@@ -39,7 +39,7 @@ class Out:
   def set_PID(self,wanted_position,sensor_input):
     """send a signal through a PID, based on the wanted command and the sensor_input"""
     self.time= time.time()
-    self.out=(wanted_position-self.offset)/self.gain
+    self.out=(wanted_position/self.gain)-self.offset
 
     self.error=self.out-sensor_input
     self.I_term += self.Ki*self.error*(self.last_time-self.time)
@@ -98,7 +98,7 @@ def streamer(device,subdevice,chans,comedi_range,shared_array):
   fd = c.comedi_fileno(dev) #get a file-descriptor for use later
 
   BUFSZ = 10000 #buffer size
-  freq=8000 # acquisition frequency: if too high, set frequency to maximum.
+  freq=8000# acquisition frequency: if too high, set frequency to maximum.
  
   nchans = len(chans) #number of channels
   aref =[c.AREF_GROUND]*nchans
@@ -132,25 +132,39 @@ def streamer(device,subdevice,chans,comedi_range,shared_array):
 #Lines below are for initializing the format, depending on the comedi-card.
   data = os.read(fd,BUFSZ) # read buffer and returns binary data
   data_length=len(data)
+  #print maxdata
+  #print data_length
   if maxdata[0]<=65536: # case for usb-dux-D
     n = data_length/2 # 2 bytes per 'H'
     format = `n`+'H'
   elif maxdata[0]>65536: #case for usb-dux-sigma
     n = data_length/4 # 2 bytes per 'H'
     format = `n`+'I'
+  #print struct.unpack(format,data)
     
 # init is over, start acquisition and stream
+  last_t=time.time()
   try:
     while True:
+      #t_now=time.time()
+      #while (t_now-last_t)<(1./frequency):
+	#t_now=time.time()
+	##print t_now-last_t
+      #last_t=t_now
       data = os.read(fd,BUFSZ) # read buffer and returns binary data
+      #print len(data), data_length
       if len(data)==data_length:
 	datastr = struct.unpack(format,data) # convert binary data to digital value
 	if len(datastr)==nchans: #if data not corrupted for some reason
+	  #shared_array.acquire()
 	  for i in range(nchans):
 	    shared_array[i]=c.comedi_to_phys((datastr[i]),range_ds[i],maxdata[i])
-	j+=1
-	print "Frequency= ",(j/(time.time()-t0))
-	print np.transpose(shared_array[:])
+	  #print datastr
+	  #shared_array.release()
+	#j+=1
+	#print j
+	#print "Frequency= ",(j/(time.time()-t0))
+	#print np.transpose(shared_array[:])
 
   except (KeyboardInterrupt):	
     c.comedi_cancel(dev,subdevice)

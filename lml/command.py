@@ -72,7 +72,10 @@ def pipe_compactor(acquisition_step,send_pipes,*args):
 	condition=False
       i+=1
     for i in range(len(send_pipes)):
-      send_pipes[i].send(data)
+      #print "data= ",np.shape(data)
+      #print data
+      #print "data2= " ,np.shape(data[::,::send_pipes[i][1]])
+      send_pipes[i][0].send(np.asarray(data)[::,::send_pipes[i][1]])
       
 def data_filter(method, size, data_stream,filtered_stream):
   """Receive a stream (multiprocessing.Value), filter it with said method and size, and return another Value (filtered_stream)

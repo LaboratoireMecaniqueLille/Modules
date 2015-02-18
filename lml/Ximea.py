@@ -4,6 +4,19 @@ import sys
 import time
 import numpy as np
 import cv2
+import skimage.io as io
+import zmqnumpy as zmqnp
+
+class fake_camera():
+  """
+  Create a dummy camera class, wich allows one to test a script with the same syntax but without a camera plugged in
+  """
+  def __init__(self,image_directory):
+    self.img=(io.imread(image_directory)).astype(np.uint16)
+
+  def read(self):
+    return 1, self.img
+
 
 def ZOI_selection(image):
   """
@@ -66,7 +79,31 @@ def stream_server(device,topics,*args):
     topics: number of output you need
     you can define the port as args.
   """
-  cap=device
+  #cap=device
+  
+  numdevice=0 # n° of the camera. 0 if you only have one plugged
+  exposure=5000 # exposition time, in microseconds
+  gain=1 
+  height=2048# reducing this one allows one to increase the FPS
+  width=2048 # doesn't work for this one
+  data_format=0 #0 = 8 bits. BE AWARE, at this point, errors may occur if you switch to 10 or 16 bits
+  offset_X=0 # change this parameters only if height and width < 2048. It allows you to change the position of the cropped region you want to see. See documentation for acceptable values
+  offset_Y=0
+  cap = cv2.VideoCapture(cv2.CAP_XIAPI + numdevice)
+  cap.set(cv2.CAP_PROP_XI_DATA_FORMAT,data_format)
+  cap.set(cv2.CAP_PROP_XI_AEAG,0)#auto gain auto exposure
+  cap.set(cv2.CAP_PROP_FRAME_WIDTH,width);  # doesn't work for this one
+  cap.set(cv2.CAP_PROP_FRAME_HEIGHT,height); # reducing this one allows one to increase the FPS
+  cap.set(cv2.CAP_PROP_XI_OFFSET_Y,offset_X); # Vertical axis
+  cap.set(cv2.CAP_PROP_XI_OFFSET_X,offset_Y) # horizontal axis from the left
+  cap.set(cv2.CAP_PROP_EXPOSURE,exposure) # setting up exposure
+  cap.set(cv2.CAP_PROP_GAIN,gain) #setting up gain
+  #topics=1 # number of output you want to generate
+  time.sleep(1)
+  
+  ret,frame=cap.read()
+  print frame.shape
+  
   
   port = "5556" #default port
   if len(args) != 0:  # you can pass another port in argument
@@ -80,15 +117,21 @@ def stream_server(device,topics,*args):
   #t0=time.time()
   #t100=t0
   #messagedata = np.ones((2000,2000))
+  i=0
   while True:
     #if j%100==0 and j>0:
       #print "mean_FPS_send= ",(100/(time.time()-t100))
       #t100=time.time()
     ret, messagedata = cap.read()
+    #print i,ret
+    #print "messagedata.shape= ",messagedata.shape
+    str_shape=(np.array((messagedata.shape[0],messagedata.shape[1]))).tostring()
+    str_messagedata=(messagedata.astype(np.uint8)).tostring()
     #messagedata = np.ones((2000,2000))*j
     #print "%s %s" % (topic, messagedata)
     for topic in range(topics):
-      socket.send("%s + %s" % (topic,messagedata)) # send messagedata with topic. Only a socket reading this topic will receive the message
+      socket.send("%s+DECOUPAGE++%s+DECOUPAGE++%s" % (topic,str_shape,str_messagedata)) # send messagedata with topic. Only a socket reading this topic will receive the message
+    i+=1
     #print "FPS_send= ", (1/(time.time()-t0))
     #print "j = ", j
     #print "loop"
@@ -97,7 +140,7 @@ def stream_server(device,topics,*args):
     
 class stream_reader():
   """Read a ximea video stream, with said topic, on port defined as *args (5556 by default)
-    topics: number of the input you need to read
+    topic: number of the input you need to read
     you can define the port as args.
   """
   def __init__(self,topic,*args):
@@ -119,7 +162,19 @@ class stream_reader():
     self.socket.connect ("tcp://localhost:%s" % self.port) # connect the socket
     string = self.socket.recv() # read message 
     self.socket.disconnect ("tcp://localhost:%s" % self.port) # disconnect to clear the buffer
-    topic, messagedata = string.split("+") # split topic from message
+    #topic, messagedata = string.split("+") # split topic from message
+    data=string.split("+DECOUPAGE++")
+    #print len(data)
+    topic=data[0]
+    str_shape=data[1]
+    str_messagedata=data[2]
+    shape=np.fromstring(str_shape,dtype=int,count=2)
+    #print "shape= ",shape[0], shape[1]
+    messagedata=np.fromstring(str_messagedata,dtype=np.uint8)
+    #print len(messagedata)
+    #print messagedata.shape
+    frame=messagedata.reshape(shape[0],shape[1])
+    #frame=messagedata
     #print  messagedata
     #print "FPS_recv= ", (1/(time.time()-t0))
-    return messagedata
+    return frame
