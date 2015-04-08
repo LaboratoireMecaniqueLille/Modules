@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import scipy
-from scipy.optimize import leastsq
+#from scipy.optimize import leastsq
 import matplotlib.pyplot as plt
-import math as m
+#import math as m
 import GetPTW as PTW
 import copy
 import numpy.ma as ma
 import skimage.io as io
 io.use_plugin('freeimage')
-
+from multiprocessing import Process
+import os
 
 class Calibration:
   def __init__(self,sigma,BB_Emissivity,directory,result_directory,video_directory,Tmin,Tmax,Tstep,polynomial_degree,bad_pix_critere,area_size,NUC,Flux,extension,camera): 
@@ -73,7 +74,7 @@ class Calibration:
 	shape=np.shape(imageBB[0])
 	b=shape[0]
 	c=shape[1]
-	DL_mean.append(np.mean(imageBB[i][m.floor((b-self.area_size)/2):m.floor((b+self.area_size)/2),m.floor((c-self.area_size)/2):m.floor((c+self.area_size)/2)]))
+	DL_mean.append(np.mean(imageBB[i][np.floor((b-self.area_size)/2):np.floor((b+self.area_size)/2),np.floor((c-self.area_size)/2):np.floor((c+self.area_size)/2)]))
 	mat2vect[i]=np.reshape(imageBB[i],(1,b*c))
       matrice = np.concatenate([mat2vect[i] for i in range(len(imageBB))],axis=0)
     if self.camera=="jade":
@@ -90,7 +91,7 @@ class Calibration:
 	shape=np.shape(imageBB[0])
 	b=shape[0]
 	c=shape[1]
-	DL_mean.append(np.mean(imageBB2[h][m.floor((b-self.area_size)/2):m.floor((b+self.area_size)/2),m.floor((c-self.area_size)/2):m.floor((c+self.area_size)/2)]))
+	DL_mean.append(np.mean(imageBB2[h][np.floor((b-self.area_size)/2):np.floor((b+self.area_size)/2),np.floor((c-self.area_size)/2):np.floor((c+self.area_size)/2)]))
 	mat2vect[h]=np.reshape(imageBB2[h],(1,b*c))
       matrice = np.concatenate([mat2vect[h] for h in range(len(imageBB))],axis=0)
     elif self.camera!="jade" and self.camera!="titanium":
@@ -146,24 +147,28 @@ class Calibration:
     This function spots the bad pixels in each image, and set their value to 0. It keeps the bad pixels of the worst image(with the maximum numbers of BP)
       Returns:
 	DL_final, wich is the DL with mean value replacing the bad pixels. You are not supposed to use this for anything other than display purpose.
-	mouchard_final : the matrix of bad pixels (1 =good, 0=bad)
+	mouchard_final : the matrix of bad pixels (0 =good, 1=bad)
 	last_nbr_BP : the number of bad pixels spoted
       Saves the mouchard matrix in the result directory.
     """
     DL_final={}
     DL_mat={}
     DL_reshaped=[]
-    last_nbr_BP=0
-    best_mouchard=[]
+    #best_mouchard=[]
     
     
     for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1):
       DL_mat[i]=np.reshape(DL[i],shape)
       DL_mat[i],mouchard,nbr_BP=self.bad_pixels_detection_grad(DL_mat[i])
       DL_reshaped.append(np.reshape(DL_mat[i],(1,shape[0]*shape[1])))
-      if nbr_BP>last_nbr_BP:
+      #if nbr_BP>last_nbr_BP:
+      mouchard=mouchard.astype(np.int)
+      #print mouchard
+      if i==0: # for the first step
 	best_mouchard=mouchard
-	last_nbr_BP=nbr_BP
+      else:
+	best_mouchard|=mouchard # it's a OR operand: this way you just add all the bad pixels of every step
+    last_nbr_BP=len(np.where(best_mouchard==1)[1]) 
     DL_final = np.concatenate([DL_reshaped[i] for i in range(0,(self.Tmax-self.Tmin)/self.Tstep+1)],axis=0)
     mouchard_final=np.reshape(best_mouchard,(1,shape[0]*shape[1]))
     np.save(self.result_directory+'mouchard',mouchard_final)
@@ -187,16 +192,22 @@ class Calibration:
     k=0
     crit=self.bad_pix_critere*np.mean(E[:]) # critere de jugement des mauvais pixels
     for i in range(1,b-1):
-	for j in range(1,c-1):
-	  seuil=E[i,j]+crit
-	  if E[i-1,j] > seuil:
-	      if(E[i+1,j] > seuil):
-		  if(E[i,j-1] > seuil):
-		      if(E[i,j+1] > seuil):
-			  DL_corrected[i,j]=0
-			  nbr_BP +=1
-			  mouchard[i,j]=1
-			  DLC_NUC[i,j]= 0.25*(DL[i+1,j] + DL[i-1,j]+ DL[i,j-1]+ DL[i,j+1])  # This DLC is supposed to be used ONLY for the NUC. 
+      for j in range(1,c-1):
+	seuil=E[i,j]+crit
+	score=0
+	if E[i-1,j] > seuil:
+	  score+=1
+	if(E[i+1,j] > seuil):
+	  score+=1
+	if(E[i,j-1] > seuil):
+	  score+=1
+	if(E[i,j+1] > seuil):
+	  score+=1
+	if score>=3: # if there is 3 odd values (or more) around a pixel, there is a bad pixel
+	  DL_corrected[i,j]=0
+	  nbr_BP +=1
+	  mouchard[i,j]=1
+	  DLC_NUC[i,j]= 0.25*(DL[i+1,j] + DL[i-1,j]+ DL[i,j-1]+ DL[i,j+1])  # This DLC is supposed to be used ONLY for the NUC. 
     return DLC_NUC,mouchard,nbr_BP
 
 
@@ -224,6 +235,7 @@ class Calibration:
     if self.Flux== True:
       T=((flux/(self.BB_Emissivity*self.sigma))**(0.25)-273.16)  
       matrix=T
+    mouchard|=np.isnan(matrix)
     masked=ma.masked_array(matrix,mouchard,fill_value=0)  ### applique une matrice mask
     masked_reshaped=np.reshape(masked,(b,c))  
     return masked_reshaped
@@ -255,42 +267,69 @@ class Calibration:
 
   def apply_to_essay(self,save_tif,video):
     """
-    This function applies the calibration to ALL the images in the essay. MAKE SURE your calibration is right before launching this. 
+    This function applies the calibration to ALL the images in the essay. MAKE SURE your calibration is right before launching this because this function is time-consuming.
+    It is now working in 4 processus, wich accelerate it but remain long.(10-15 minutes for 10000 images)
     Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
 	- for T<65°C. Temperature = pixelValue /1000. mK precision
 	- for 65<T<650 , Temperature = Value/100, 10mK precision
 	- for T >650, Temperature = Value /10, 100mK precision
+    Bad pixels are filled with 0
     """
     test1=PTW.GetPTW(self.video_directory+video)
     frame_nbr=test1.number_of_frames
     frame_rate=test1.frame_rate
     frame={}
-    for i in range (0,frame_nbr):
-      print "frame n° : ",i
-      test1.get_frame(i)
-      frame[0]=(test1.frame_data)
-      #print frame[0].max()
-      T_map2=self.apply_coeffs(frame)
-      if self.Flux==True:
-	T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-	#power=np.floor(np.log10(2**16/(max(T_map)))) # For storing Temperature information in a 16 bits tiff as integer 
-	#T_map2=(np.around(T_map,decimals=power))*10**power
-	T_map2=(np.around(T_map,decimals=3))*10**3
-      T_map3=(T_map2).astype(np.uint16)
-      #print T_map2.max()
-      #print T_map3.max()
-      if save_tif==True:
-	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+str(i)+".tiff",T_map3) #.astype(np.int16)
-
+    proc={}
+    if not os.path.exists(self.result_directory+"IR_images/"):
+      os.makedirs(self.result_directory+"IR_images/")
+    n=np.int(np.floor(frame_nbr/4.))  
+      
+    def para_func(init,fin):  
+      for i in range (init,fin):
+	if i%100==0:
+	  print "frame n° : %s of %s"%(i,frame_nbr)
+	test1.get_frame(i)
+	frame[0]=(test1.frame_data)
+	#print frame[0].max()
+	T_map2=self.apply_coeffs(frame)
+	if self.Flux==True:
+	  T_map=np.clip(T_map2,self.Tmin,self.Tmax)
+	  power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
+	  #print T_map
+	  T_map2=(np.around(T_map,decimals=power.astype(np.int)))*10**power
+	  #T_map2=(np.around(T_map,decimals=3))*10**3h
+	T_map3=(T_map2).astype(np.uint16)
+	#print T_map2.max()
+	#print T_map3.max()
+	if save_tif==True:
+	  io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+str(i)+".tiff",T_map3.filled()) #save as a tiff the masked array, with 0 for the bad pixels.
+    try:
+      for i in range(4):
+	if i<3:
+	  proc[i]=Process(target=para_func,args=(np.int(i*n),np.int((i+1)*n),))
+	else:
+	  proc[i]=Process(target=para_func,args=(np.int(i*n),np.int(frame_nbr),))
+      for i in range(4):
+	proc[i].start()
+      for i in range(4):
+	proc[i].join()
+      for i in range(4):
+	proc[i].terminate()
+    except:
+      for i in range(4):
+	proc[i].terminate()
 
   def apply_to_essay_mean(self,save_tif,video):
     """
     This function applies the calibration to ALL the images in the essay and evaluate the mean value for each pixels. MAKE SURE your calibration is right before launching this. 
     Images are saved in .tiff 16 bits, wich allow to store temperature information directly inside:
-	- for T<65°C. Temperature = pixelValue /1000. mK precision
+	- for T<65°C. Temperature = pixelValue /1000. 1mK precision
 	- for 65<T<650 , Temperature = Value/100, 10mK precision
 	- for T >650, Temperature = Value /10, 100mK precision
+    Bad pixels are filled with 0
     """
+    if not os.path.exists(self.result_directory+"IR_images/"):
+      os.makedirs(self.result_directory+"IR_images/")
     test1=PTW.GetPTW(self.video_directory+video)
     frame_nbr=test1.number_of_frames
     frame[0]=0
@@ -300,10 +339,30 @@ class Calibration:
     T_map2=self.apply_coeffs(frame)
     if self.Flux==True:
       T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-      power=np.floor(np.log10(2**16/(max(T_map)))) # For storing Temperature information in a 16 bits tiff as integer 
-      T_map2=(np.around(T_map,decimals=power))*10**power
+      power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
+      T_map2=(np.around(T_map,decimals=power.astype(np.int)))*10**power
     T_map3=(T_map2).astype(np.uint16)
     if save_tif==True:
-	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+"_mean.tiff",T_map3) #.astype(np.int16)
+	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+"_mean.tiff",T_map3.filled()) #.astype(np.int16)
 
-
+  def color_images(self,images_directory,images,mean_,std_):
+    """
+    This function is used to load converted images and apply coloring and colorbar, then saving in a new folder (./colored_img).
+    arguments are:
+      - images_directory : complete directory to the images : has to finish by "/"
+      - images : list of the images you want to load, as string.
+      - mean_ : the mean value for the colorbar
+      - std_: colorbar is defined between mean_-std_;mean_+std_
+    """
+    if not os.path.exists(images_directory+'colored_img'):
+      os.makedirs(images_directory+'colored_img')
+    for i in range(len(images)):
+      print "Converting image %s..."%i
+      img=io.imread(images_directory+images[i])
+      fig=plt.figure()
+      ax = fig.add_subplot(1,1,1)
+      plt.imshow(img)
+      plt.clim(mean_-std_,mean_+std_)
+      plt.colorbar()
+      plt.savefig(images_directory+'colored_img/'+images[i]+'.tiff', bbox_inches='tight')
+      plt.close('all')
