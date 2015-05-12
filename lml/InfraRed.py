@@ -294,9 +294,9 @@ class Calibration:
 	T_map2=self.apply_coeffs(frame)
 	if self.Flux==True:
 	  T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-	  power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
+	  self.power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
 	  #print T_map
-	  T_map2=(np.around(T_map,decimals=power.astype(np.int)))*10**power
+	  T_map2=(np.around(T_map,decimals=self.power.astype(np.int)))*10**self.power
 	  #T_map2=(np.around(T_map,decimals=3))*10**3h
 	T_map3=(T_map2).astype(np.uint16)
 	#print T_map2.max()
@@ -339,30 +339,33 @@ class Calibration:
     T_map2=self.apply_coeffs(frame)
     if self.Flux==True:
       T_map=np.clip(T_map2,self.Tmin,self.Tmax)
-      power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
-      T_map2=(np.around(T_map,decimals=power.astype(np.int)))*10**power
+      self.power=np.floor(np.log10(2**16/(T_map.max()))) # For storing Temperature information in a 16 bits tiff as integer 
+      T_map2=(np.around(T_map,decimals=self.power.astype(np.int)))*10**self.power
     T_map3=(T_map2).astype(np.uint16)
     if save_tif==True:
 	io.imsave(self.result_directory+"IR_images/"+"img_"+str(video)+"_mean.tiff",T_map3.filled()) #.astype(np.int16)
 
-  def color_images(self,images_directory,images,mean_,std_):
+  def color_images(self,images_directory,images,std_,mean_=0):
     """
     This function is used to load converted images and apply coloring and colorbar, then saving in a new folder (./colored_img).
     arguments are:
       - images_directory : complete directory to the images : has to finish by "/"
       - images : list of the images you want to load, as string.
-      - mean_ : the mean value for the colorbar
       - std_: colorbar is defined between mean_-std_;mean_+std_
+      - mean_ : (default = 0) the mean value for the colorbar
     """
     if not os.path.exists(images_directory+'colored_img'):
       os.makedirs(images_directory+'colored_img')
     for i in range(len(images)):
       print "Converting image %s..."%i
       img=io.imread(images_directory+images[i])
+      img=img/(10.**self.power)
+      if i==0:
+		  img_ref=img
       fig=plt.figure()
       ax = fig.add_subplot(1,1,1)
-      plt.imshow(img)
-      plt.clim(mean_-std_,mean_+std_)
+      plt.imshow(img-img_ref)
+      plt.clim(-std_,+std_)
       plt.colorbar()
       plt.savefig(images_directory+'colored_img/'+images[i]+'.tiff', bbox_inches='tight')
       plt.close('all')
